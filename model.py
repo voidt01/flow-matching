@@ -6,9 +6,71 @@ import torch.nn as nn
 import torch.nn.functional as F 
 from torch import einsum
 
-from einops import reduce, rearrage
+from einops import reduce, rearrange
 from einops.layers.torch import Rearrange
 
+class Attention(nn.Module):
+    def __init__(self, dim, heads=4, dim_head=32):
+        super().__init__()
+
+        self.scale = dim_head ** -0.5
+        self.heads = heads
+        hidden_dims = self.heads * dim_head
+
+        self.to_qkv = nn.Conv2d(dim, hidden_dims * 3, 1, bias=False)
+        self.to_out = nn.Conv2d(hidden_dims, dim, 1)
+
+    def forward(self, x):
+        b, c, h, w = x.shape
+
+        qkv = self.to_qkv(x).chunk(3, dim=1)
+        q, k, v = map(
+            lambda t: rearrange(t, 'b (h c) x y -> b h c (x y)', h=self.heads), qkv
+        )
+        q = q * self.scale
+
+        sim = einsum('b h d i, b h d j -> b h i j', q, k)
+        sim = sim - sim.amax(dim=-1, keepdim=True).detach()
+        attn = sim.softmax(dim=-1)
+
+        out = einsum('b h i j, b h d j -> b h i d', attn, v)
+        out = rearrange(out, 'b h (x y) d -> b (h d) x y', x = h, y = w)
+
+        return self.to_out(out)
+
+class ResnetBlock(nn.Module):
+    def __init__(self, dim, dim_out, *, time_emb_dim=None):
+        super().__init__()
+
+        self.time_proj = (
+            nn.Sequential(
+                nn.SiLU(),
+                nn.Linear(time_emb_dim, dim_out * 2)
+            )
+            if exists(time_emb_dim)
+            else None
+        )
+
+        if exists(self.time_proj):
+            nn.init.zeros_(self.time_proj[-1].weight)
+            nn.init.zeros_(self.time_proj[-1].bias)
+
+        self.block1 = Block(dim, dim_out)
+        self.block2 = Block(dim_out, dim_out)
+        self.res_conv = nn.Conv2d(dim, dim_out, 1) if dim != dim_out else nn.Identity()
+
+    def forward(self, x, time_emb=None):
+        scale_shift = None
+
+        if exists(self.time_proj) and exists(time_emb):
+            time = self.time_proj(time_emb)
+            time = rearrange(time, 'b c -> b c 1 1')
+            scale_shift = time.chunk(2, dim=1)
+
+        h = self.block1(x, scale_shift=scale_shift)
+        h = self.block2(h)
+
+        return h + self.res_conv(x)
 
 class Block(nn.Module):
     def __init__(self, dim, dim_out):
@@ -34,18 +96,18 @@ class WeightStandardizedConv2d(nn.Conv2d):
         eps = 1e-5 if x.dtype == torch.float32 else 1e-3
 
         weight = self.weight
-        mean = reduce(weight, 'o ... -> b 1 1 1', 'mean')
-        variance = reduce(weight, 'o ... -> b 1 1 1', partial(torch.var, unbiased=False))
+        mean = reduce(weight, 'o ... -> o 1 1 1', 'mean')
+        variance = reduce(weight, 'o ... -> o 1 1 1', partial(torch.var, unbiased=False))
         normalized_weight = (weight - mean) * (variance + eps).rsqrt()
 
         return F.conv2d(
-            weight=normalized_weight,
-            bias=self.bias,
-            stride=self.stride,
-            padding=self.padding,
-            dilation=self.dilation,
-            groups=self.groups,
-
+            x,
+            normalized_weight,
+            self.bias,
+            self.stride,
+            self.padding,
+            self.dilation,
+            self.groups
         )
 
 def downsample(dim, dim_out=None):
@@ -67,3 +129,4 @@ def default(val, d):
     if exists(val):
         return val
     return d() if callable(d) else d
+
