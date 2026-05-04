@@ -9,6 +9,74 @@ from torch import einsum
 from einops import reduce, rearrange
 from einops.layers.torch import Rearrange
 
+# U-net
+class Unet(nn.Module):
+    def __init__(self, cfg):
+        dims = [cfg.base_dim * channel for channel in cfg.channel_mult]
+        in_out = list(zip(dims[:-1], dims[1:]))
+
+        self.time_emb = TimeEmbedding(cfg.time_emb_dim)
+        self.init_conv = nn.Conv2d(cfg.channels, dims[0], 7, padding=3)
+
+        self.downs = nn.ModuleList([])
+        self.ups = nn.ModuleList([])
+
+        for ind, (dim_in, dim_out) in enumerate(in_out):
+            is_last = ind == len(in_out) - 1
+            self.downs.append(nn.ModuleList([
+                ResnetBlock(dim_in, dim_in, time_emb_dim=cfg.time_emb_dim),
+                ResnetBlock(dim_in, dim_in, time_emb_dim=cfg.time_emb_dim),
+                downsample(dim_in, dim_out) if not is_last else nn.Conv2d(dim_in, dim_out, 3, padding=1)
+            ]))  
+                
+        mid_dim = dims[-1]
+        self.mid_block1 = ResnetBlock(mid_dim, mid_dim, time_emb_dim=cfg.time_emb_dim)
+        self.mid_attn = Attention(mid_dim)
+        self.mid_block2 = ResnetBlock(mid_dim, mid_dim, time_emb_dim=cfg.time_emb_dim)        
+
+        for ind, (dim_in, dim_out) in enumerate(reversed(in_out)):
+            is_last = ind == len(in_out) - 1
+            self.ups.append(nn.ModuleList([
+                ResnetBlock(dim_out + dim_in, dim_out, time_emb_dim=cfg.time_emb_dim),
+                ResnetBlock(dim_out + dim_in, dim_out, time_emb_dim=cfg.time_emb_dim),
+                upsample(dim_out, dim_in) if not is_last else nn.Conv2d(dim_out, dim_in, 3, padding=1)
+            ]))
+
+        self.final_res = ResnetBlock(dims[0] * 2, dims[0], time_emb_dim=cfg.time_emb_dim)
+        self.final_conv = nn.Conv2d(dims[0], cfg.channels, 1)
+
+    def forward(self, x, t):
+        t = self.time_emb(t)
+        x = self.init_conv(x)
+        r = x.clone()
+
+        skips = []
+        for block1, block2, down in self.downs:
+            x = block1(x, t)
+            skips.append(x)
+            x = block2(x, t)
+            skips.append(x)
+
+            x = down(x)
+        
+        x = self.mid_block1(x, t)
+        x = self.mid_attn(x)
+        x = self.mid_block2(x, t)
+
+        for block1, block2, up in self.ups:
+            x = torch.cat([x, skips.pop()], dim=1)
+            x = block1(x, t)
+            x = torch.cat([x, skips.pop()], dim=1)
+            x = block2(x, t)
+
+            x = up(x)
+        
+        x = torch.cat([x, r], dim=1)
+        x = self.final_res(x, t)
+        return self.final_conv(x)
+
+
+## Building Blocks
 class Attention(nn.Module):
     def __init__(self, dim, heads=4, dim_head=32):
         super().__init__()
@@ -109,7 +177,26 @@ class WeightStandardizedConv2d(nn.Conv2d):
             self.dilation,
             self.groups
         )
+    
+## Time Embedding
+class TimeEmbedding(nn.Module):
+    def __init__(self, dim):
+        self.dim = dim
+        self.proj = nn.Sequential(
+            nn.Linear(dim, dim * 4),
+            nn.SiLU(),
+            nn.Linear(dim * 4, dim)
+        )
 
+    def forward(self, t):
+        half = self.dim // 2
+        emb = math.log(10000) / (half - 1)
+        emb = torch.exp(torch.arange(half, device = t.device) * -emb)
+        emb = t[:, None] * emb[None, :]
+        emb = torch.cat([emb.sin(), emb.cos()], dim=-1)
+        return self.proj(emb)
+
+## Helpers 
 def downsample(dim, dim_out=None):
     return nn.Sequential(
         Rearrange('b c (h p1) (w p2) -> b (c p1 p2) h w', p1=2, p2=2),
