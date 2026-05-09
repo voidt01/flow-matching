@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 from torch.amp import GradScaler, autocast
 
-import os
+import argparse
 from itertools import cycle
 from dataclasses import dataclass
 from einops import rearrange
@@ -22,7 +22,7 @@ class TrainConfig:
 
     # Training
     max_steps: int = 16000
-    batch_size: int = 128
+    batch_size: int = 256
     lr: float = 1e-4
 
     # Environment
@@ -60,13 +60,12 @@ def train(cfg):
     scaler = GradScaler(cfg.device)
     loader = cycle(get_dataloader(cfg))
 
-    print('currently run training')
     for step in range(cfg.max_steps):
         x1, _ = next(loader)
         
         x1 = x1.to(cfg.device)
         x0 = torch.randn_like(x1)
-        t = torch.rand(cfg.batch_size, dtype=x1.dtype ,device = cfg.device)
+        t = torch.rand(x1.shape[0], dtype=x1.dtype ,device = cfg.device)
         t_mod = rearrange(t, 'b -> b 1 1 1')
 
         x_t = t_mod * x1 + (1 - t_mod) * x0
@@ -87,6 +86,21 @@ def train(cfg):
 
 def main():
     cfg = TrainConfig()
+
+    parser = argparse.ArgumentParser(description='training configuration')
+    parser.add_argument('-bs', '--batch_size', type=int, help='batch size of train data', metavar='', default=cfg.batch_size)
+    parser.add_argument('-ms', '--max_steps', type=int, help='maximum steps for training', metavar='', default=cfg.max_steps)
+    parser.add_argument('-lr', '--learning_rate', type=float, help='learning rate for the optimizer', metavar='', default=cfg.lr)
+    parser.add_argument('-dr', '--data_dir', type=str, help='data folder location ', metavar='', default=cfg.data_dir)
+    args = parser.parse_args()
+
+    cfg = TrainConfig(
+        batch_size=args.batch_size,
+        max_steps=args.max_steps,
+        lr=args.learning_rate,
+        data_dir=args.data_dir
+    )
+
     train(cfg)
 
 if __name__ == '__main__':
