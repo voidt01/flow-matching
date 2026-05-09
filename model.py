@@ -12,7 +12,9 @@ from einops.layers.torch import Rearrange
 # U-net
 class Unet(nn.Module):
     def __init__(self, cfg):
-        dims = [cfg.base_dim * channel for channel in cfg.channel_mult]
+        super().__init__()
+
+        dims = cfg.dims
         in_out = list(zip(dims[:-1], dims[1:]))
 
         self.time_emb = TimeEmbedding(cfg.time_emb_dim)
@@ -181,6 +183,7 @@ class WeightStandardizedConv2d(nn.Conv2d):
 ## Time Embedding
 class TimeEmbedding(nn.Module):
     def __init__(self, dim):
+        super().__init__()
         self.dim = dim
         self.proj = nn.Sequential(
             nn.Linear(dim, dim * 4),
