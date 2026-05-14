@@ -5,6 +5,7 @@ from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 from torch.amp import GradScaler, autocast
 
+import os
 import argparse
 from itertools import cycle
 from dataclasses import dataclass
@@ -27,6 +28,7 @@ class TrainConfig:
 
     # Environment
     data_dir: str = 'kaggle/working/data'
+    ckpt_dir: str = 'kaggle/working/checkpoints'
     device: str = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     @property
@@ -83,6 +85,9 @@ def train(cfg):
 
         if (step + 1) % (cfg.max_steps // 10) == 0:
             print(f'step {step + 1}: Loss - {loss.item()}')
+    
+    os.makedirs(cfg.ckpt_dir, exist_ok=True)
+    torch.save(model.state_dict(), os.path.join(cfg.ckpt_dir, f"MNIST_{cfg.max_steps}steps.pt"))
 
 def main():
     cfg = TrainConfig()
@@ -92,13 +97,15 @@ def main():
     parser.add_argument('-ms', '--max_steps', type=int, help='maximum steps for training', metavar='', default=cfg.max_steps)
     parser.add_argument('-lr', '--learning_rate', type=float, help='learning rate for the optimizer', metavar='', default=cfg.lr)
     parser.add_argument('-dr', '--data_dir', type=str, help='data folder location ', metavar='', default=cfg.data_dir)
+    parser.add_argument('-cr', '--ckpt_dir', type=str, help='checkpoint folder location', metavar='', default=cfg.ckpt_dir)
     args = parser.parse_args()
 
     cfg = TrainConfig(
         batch_size=args.batch_size,
         max_steps=args.max_steps,
         lr=args.learning_rate,
-        data_dir=args.data_dir
+        data_dir=args.data_dir,
+        ckpt_dir=args.ckpt_dir
     )
 
     train(cfg)
