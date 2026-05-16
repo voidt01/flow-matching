@@ -14,7 +14,7 @@ from einops import rearrange
 from model import Unet
 
 @dataclass
-class TrainConfig:
+class Config:
     # Model
     base_dim: int = 64
     channel_mult: tuple = (1, 2, 4)
@@ -90,7 +90,7 @@ def train(cfg):
     torch.save(model.state_dict(), os.path.join(cfg.ckpt_dir, f"MNIST_{cfg.max_steps}steps.pt"))
 
 def main():
-    cfg = TrainConfig()
+    cfg = Config()
 
     parser = argparse.ArgumentParser(description='training configuration')
     parser.add_argument('-bs', '--batch_size', type=int, help='batch size of train data', metavar='', default=cfg.batch_size)
@@ -100,7 +100,7 @@ def main():
     parser.add_argument('-cr', '--ckpt_dir', type=str, help='checkpoint folder location', metavar='', default=cfg.ckpt_dir)
     args = parser.parse_args()
 
-    cfg = TrainConfig(
+    cfg = Config(
         batch_size=args.batch_size,
         max_steps=args.max_steps,
         lr=args.learning_rate,
