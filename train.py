@@ -9,9 +9,9 @@ import os
 import argparse
 from itertools import cycle
 from dataclasses import dataclass
-from einops import rearrange
 
 from model import Unet
+from utils import EMA, set_seed
 
 @dataclass
 class Config:
@@ -27,9 +27,10 @@ class Config:
     lr: float = 1e-4
 
     # Environment
-    data_dir: str = 'kaggle/working/data'
-    ckpt_dir: str = 'kaggle/working/checkpoints'
+    data_dir: str = '/kaggle/working/data'
+    ckpt_dir: str = '/kaggle/working/checkpoints'
     device: str = 'cuda' if torch.cuda.is_available() else 'cpu'
+    seed: int = 42
 
     @property
     def dims(self):
@@ -57,9 +58,14 @@ def get_dataloader(cfg):
     )
 
 def train(cfg):
+    set_seed(cfg.seed)
+
     model = Unet(cfg).to(cfg.device)
+    ema_model = EMA(model)
+
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg.lr)
     scaler = GradScaler(cfg.device)
+
     loader = cycle(get_dataloader(cfg))
 
     for step in range(cfg.max_steps):
@@ -67,27 +73,31 @@ def train(cfg):
         
         x1 = x1.to(cfg.device)
         x0 = torch.randn_like(x1)
-        t = torch.rand(x1.shape[0], dtype=x1.dtype ,device = cfg.device)
-        t_mod = rearrange(t, 'b -> b 1 1 1')
+        t = torch.rand(x1.shape[0], 1, 1, 1, dtype=x1.dtype ,device = cfg.device)
 
-        x_t = t_mod * x1 + (1 - t_mod) * x0
+        x_t = t * x1 + (1 - t) * x0
         target = x1 - x0
 
         optimizer.zero_grad(set_to_none=True)
 
         with autocast(cfg.device):
-            pred = model(x_t, t)
+            pred = model(x_t, t.squeeze())
             loss = F.mse_loss(pred, target)
 
         scaler.scale(loss).backward()
         scaler.step(optimizer)
         scaler.update()
 
+        ema_model.update(step)
+
         if (step + 1) % (cfg.max_steps // 10) == 0:
             print(f'step {step + 1}: Loss - {loss.item()}')
     
     os.makedirs(cfg.ckpt_dir, exist_ok=True)
-    torch.save(model.state_dict(), os.path.join(cfg.ckpt_dir, f"MNIST_{cfg.max_steps}steps.pt"))
+    torch.save({
+        'model': model.state_dict(),
+        'ema': ema_model.state_dict(),
+    }, os.path.join(cfg.ckpt_dir, f"MNIST_{cfg.max_steps}steps.pt"))
 
 def main():
     cfg = Config()

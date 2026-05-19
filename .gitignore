@@ -5,3 +5,6 @@ __pycache__/
 # experiments
 scratch.py
 data/
+
+# checkpoints
+checkpoints/
