@@ -1,0 +1,32 @@
+import copy
+import torch
+import random
+import numpy as np
+
+class EMA:
+    def __init__(self, model, update_after_step=1000, beta=0.9999):
+        self.beta = beta
+        self.update_after_step = update_after_step
+        self.model = model
+        self.ema_model = copy.deepcopy(model).eval()
+
+        for p in self.ema_model.parameters():
+            p.requires_grad_(False)
+
+    @torch.no_grad()
+    def update(self, step):
+        if step < self.update_after_step:
+            return
+        for m_param, ema_param in zip(self.model.parameters(), self.ema_model.parameters()):
+            ema_param.mul_(self.beta).add_(m_param * (1 - self.beta))
+    
+    def state_dict(self):
+        return self.ema_model.state_dict()
+    
+def set_seed(seed: int):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
