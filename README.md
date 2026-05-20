@@ -1,5 +1,5 @@
 # Flow Matching
-
+![samples](assets/mnist_samples.png)  
 Pytorch implementation of Flow Matching for image generation on MNIST 
 
 ## Setup
