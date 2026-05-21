@@ -13,7 +13,6 @@ class Config:
     max_steps: int = 16000
     batch_size: int = 256
     lr: float = 1e-4
-    wandb_mode: str = 'disabled'
 
     # Environment
     data_dir: str = '/kaggle/working/data'

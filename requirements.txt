@@ -3,4 +3,3 @@ torchvision
 einops
 matplotlib
 numpy
-wandb
