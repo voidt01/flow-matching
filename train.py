@@ -51,7 +51,7 @@ def train(cfg):
         ema_model.update(step)
 
         if (step + 1) % 100 == 0:
-            run.log({'loss': loss.item(), 'step':step})
+            run.log({'loss': loss.item()}, step=step)
 
         if (step + 1) % (cfg.max_steps // 10) == 0:
             print(f'step {step + 1}: Loss - {loss.item()}')
