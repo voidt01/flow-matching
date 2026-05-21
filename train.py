@@ -25,7 +25,10 @@ def train(cfg):
     run = wandb.init(
         project='flow-matching',
         config=vars(cfg),
-        mode=cfg.wandb_mode
+        mode=cfg.wandb_mode,
+        settings=wandb.Settings(
+            console='off'
+        )
     )
 
     for step in range(cfg.max_steps):
