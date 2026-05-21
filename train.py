@@ -3,6 +3,7 @@ import torch.nn.functional as F
 from torch.amp import GradScaler, autocast
 
 import os
+import wandb
 import argparse
 from itertools import cycle
 
@@ -21,6 +22,11 @@ def train(cfg):
     scaler = GradScaler(cfg.device)
 
     loader = cycle(get_dataloader(cfg))
+    run = wandb.init(
+        project='flow-matching',
+        config=vars(cfg),
+        mode=cfg.wandb_mode
+    )
 
     for step in range(cfg.max_steps):
         x1, _ = next(loader)
@@ -44,14 +50,19 @@ def train(cfg):
 
         ema_model.update(step)
 
+        if (step + 1) % 100 == 0:
+            run.log({'loss': loss.item(), 'step':step})
+
         if (step + 1) % (cfg.max_steps // 10) == 0:
             print(f'step {step + 1}: Loss - {loss.item()}')
     
     os.makedirs(cfg.ckpt_dir, exist_ok=True)
     torch.save({
         'model': model.state_dict(),
-        'ema': ema_model.state_dict(),
+        'ema': ema_model.state_dict(), # could be None if step < update_after_step
     }, os.path.join(cfg.ckpt_dir, f"MNIST_{cfg.max_steps}steps.pt"))
+
+    run.finish()
 
 def main():
     cfg = Config()
@@ -62,6 +73,7 @@ def main():
     parser.add_argument('-lr', '--learning_rate', type=float, help='learning rate for the optimizer', metavar='', default=cfg.lr)
     parser.add_argument('-dr', '--data_dir', type=str, help='data folder location ', metavar='', default=cfg.data_dir)
     parser.add_argument('-cr', '--ckpt_dir', type=str, help='checkpoint folder location', metavar='', default=cfg.ckpt_dir)
+    parser.add_argument('-wm', '--wandb_mode', type=str, help='wandb logging mode (disabled/online)', metavar='', default=cfg.wandb_mode)
     args = parser.parse_args()
 
     cfg = Config(
@@ -69,7 +81,8 @@ def main():
         max_steps=args.max_steps,
         lr=args.learning_rate,
         data_dir=args.data_dir,
-        ckpt_dir=args.ckpt_dir
+        ckpt_dir=args.ckpt_dir,
+        wandb_mode=args.wandb_mode
     )
 
     train(cfg)
