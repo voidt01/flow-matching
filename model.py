@@ -33,7 +33,7 @@ class Unet(nn.Module):
                 
         mid_dim = dims[-1]
         self.mid_block1 = ResnetBlock(mid_dim, mid_dim, time_emb_dim=cfg.time_emb_dim)
-        self.mid_attn = Attention(mid_dim)
+        self.mid_attn = Residual(PreNorm(Attention(mid_dim), mid_dim))
         self.mid_block2 = ResnetBlock(mid_dim, mid_dim, time_emb_dim=cfg.time_emb_dim)        
 
         for ind, (dim_in, dim_out) in enumerate(reversed(in_out)):
@@ -179,6 +179,15 @@ class WeightStandardizedConv2d(nn.Conv2d):
             self.dilation,
             self.groups
         )
+
+class PreNorm(nn.Module):
+    def __init__(self, fn, dim):
+        super().__init__()
+        self.norm = nn.GroupNorm(num_groups=1, num_channels=dim)
+        self.fn = fn
+    
+    def forward(self, x):
+        return self.fn(self.norm(x))
     
 ## Time Embedding
 class TimeEmbedding(nn.Module):
@@ -200,6 +209,14 @@ class TimeEmbedding(nn.Module):
         return self.proj(emb)
 
 ## Helpers 
+class Residual(nn.Module):
+    def __init__(self, fn):
+        super().__init__()
+        self.fn = fn
+    
+    def forward(self, x, *args, **kwargs):
+        return self.fn(x, *args, **kwargs) + x
+
 def downsample(dim, dim_out=None):
     return nn.Sequential(
         Rearrange('b c (h p1) (w p2) -> b (c p1 p2) h w', p1=2, p2=2),
