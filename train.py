@@ -27,7 +27,8 @@ def train(cfg):
         
         x1 = x1.to(cfg.device)
         x0 = torch.randn_like(x1)
-        t = torch.rand(x1.shape[0], 1, 1, 1, dtype=x1.dtype ,device = cfg.device)
+        t = torch.randn(x1.shape[0], 1, 1, 1, dtype=x1.dtype ,device = cfg.device)
+        t = torch.sigmoid(t)
 
         x_t = t * x1 + (1 - t) * x0
         target = x1 - x0
