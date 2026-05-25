@@ -8,7 +8,7 @@ from itertools import cycle
 
 from model import Unet
 from config import Config
-from data import get_dataloader
+from data import get_dataloader_MNIST, get_dataloader_Simpsons
 from utils import EMA, set_seed
 
 def train(cfg):
@@ -20,10 +20,16 @@ def train(cfg):
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg.lr)
     scaler = GradScaler(cfg.device)
 
-    loader = cycle(get_dataloader(cfg))
+    if cfg.dataset == 'simpsons':
+        loader = cycle(get_dataloader_Simpsons(cfg))
+    else:
+        loader = cycle(get_dataloader_MNIST(cfg))
 
     for step in range(cfg.max_steps):
-        x1, _ = next(loader)
+        if cfg.dataset == 'simpsons':
+            x1 = next(loader)
+        else:
+            x1, _ = next(loader)
         
         x1 = x1.to(cfg.device)
         x0 = torch.randn_like(x1)
@@ -61,8 +67,11 @@ def main():
     parser.add_argument('-bs', '--batch_size', type=int, help='batch size of train data', metavar='', default=cfg.batch_size)
     parser.add_argument('-ms', '--max_steps', type=int, help='maximum steps for training', metavar='', default=cfg.max_steps)
     parser.add_argument('-lr', '--learning_rate', type=float, help='learning rate for the optimizer', metavar='', default=cfg.lr)
-    parser.add_argument('-dr', '--data_dir', type=str, help='data folder location ', metavar='', default=cfg.data_dir)
+    parser.add_argument('-dr', '--data_dir', type=str, help='data folder location', metavar='', default=cfg.data_dir)
     parser.add_argument('-cr', '--ckpt_dir', type=str, help='checkpoint folder location', metavar='', default=cfg.ckpt_dir)
+    parser.add_argument('-bd', '--base_dim', type=int, help='base dim for Unet', metavar='', default=cfg.base_dim)
+    parser.add_argument('-c', '--channels', type=int, help='channel dim for the used dataset', metavar='', default=cfg.channels)
+    parser.add_argument('-ds', '--dataset', type=str, help='dataset for image generation (simpsons/mnist(default))', metavar='', default=cfg.dataset)
     args = parser.parse_args()
 
     cfg = Config(
@@ -70,7 +79,10 @@ def main():
         max_steps=args.max_steps,
         lr=args.learning_rate,
         data_dir=args.data_dir,
-        ckpt_dir=args.ckpt_dir
+        ckpt_dir=args.ckpt_dir,
+        base_dim=args.base_dim,
+        channels=args.channels,
+        dataset=args.dataset
     )
 
     train(cfg)
