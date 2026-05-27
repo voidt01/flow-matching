@@ -33,13 +33,17 @@ def sample_euler(
     return x
 
 def save_samples(images, output_path='samples.png'):
-    # denormalize
+    # denormalize [-1, 1] -> [0, 1]
     images = (images + 1) / 2
     images = images.clamp(0, 1)
 
     fig, axes = plt.subplots(1, len(images))
     for i, ax in enumerate(axes):
-        ax.imshow(images[i].detach().cpu().squeeze().numpy(), cmap='gray')
+        img = images[i].detach().cpu()
+        if img.shape[0] == 1:
+            ax.imshow(img.squeeze().numpy(), cmap='gray')
+        else:
+            ax.imshow(img.permute(1, 2, 0).numpy())
         ax.axis('off')
      
     plt.savefig(output_path, bbox_inches='tight')
