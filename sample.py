@@ -1,5 +1,6 @@
 import torch
 
+import os
 import yaml
 import argparse
 import matplotlib.pyplot as plt
@@ -18,7 +19,7 @@ def sample_euler(
     fixed_noise = None 
 ):
     if fixed_noise is not None:
-        x = fixed_noise.to(cfg.device)
+        x = fixed_noise.to(device)
     else:
         x = torch.randn(n_samples, cfg.channels, cfg.img_size, cfg.img_size, device=device)
 
@@ -69,7 +70,8 @@ def main():
     device = get_device()
 
     noise = torch.load(args.fixed_noise) if args.fixed_noise else None
-    ckpt = torch.load(cfg.ckpt_dir, map_location=device)
+    ckpt_path = os.path.join(cfg.ckpt_dir, f"{cfg.dataset}_{cfg.max_steps}steps.pt")
+    ckpt = torch.load(ckpt_path, map_location=device)
 
     model = Unet(
         base_dim=cfg.base_dim,
