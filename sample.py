@@ -69,7 +69,7 @@ def main():
     device = get_device()
 
     noise = torch.load(args.fixed_noise) if args.fixed_noise else None
-    ckpt = torch.load(args.ckpt_path, map_location=device)
+    ckpt = torch.load(cfg.ckpt_dir, map_location=device)
 
     model = Unet(
         base_dim=cfg.base_dim,
