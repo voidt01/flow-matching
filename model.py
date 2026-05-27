@@ -11,14 +11,14 @@ from einops.layers.torch import Rearrange
 
 # U-net
 class Unet(nn.Module):
-    def __init__(self, cfg):
+    def __init__(self, base_dim, channel_mult, time_emb_dim, channels):
         super().__init__()
 
-        dims = cfg.dims
+        dims = [base_dim * ch for ch in channel_mult]
         in_out = list(zip(dims[:-1], dims[1:]))
 
-        self.time_emb = TimeEmbedding(cfg.time_emb_dim)
-        self.init_conv = nn.Conv2d(cfg.channels, dims[0], 7, padding=3)
+        self.time_emb = TimeEmbedding(time_emb_dim)
+        self.init_conv = nn.Conv2d(channels, dims[0], 7, padding=3)
 
         self.downs = nn.ModuleList([])
         self.ups = nn.ModuleList([])
@@ -26,26 +26,26 @@ class Unet(nn.Module):
         for ind, (dim_in, dim_out) in enumerate(in_out):
             is_last = ind == len(in_out) - 1
             self.downs.append(nn.ModuleList([
-                ResnetBlock(dim_in, dim_in, time_emb_dim=cfg.time_emb_dim),
-                ResnetBlock(dim_in, dim_in, time_emb_dim=cfg.time_emb_dim),
+                ResnetBlock(dim_in, dim_in, time_emb_dim=time_emb_dim),
+                ResnetBlock(dim_in, dim_in, time_emb_dim=time_emb_dim),
                 downsample(dim_in, dim_out) if not is_last else nn.Conv2d(dim_in, dim_out, 3, padding=1)
             ]))  
                 
         mid_dim = dims[-1]
-        self.mid_block1 = ResnetBlock(mid_dim, mid_dim, time_emb_dim=cfg.time_emb_dim)
+        self.mid_block1 = ResnetBlock(mid_dim, mid_dim, time_emb_dim=time_emb_dim)
         self.mid_attn = Residual(PreNorm(Attention(mid_dim), mid_dim))
-        self.mid_block2 = ResnetBlock(mid_dim, mid_dim, time_emb_dim=cfg.time_emb_dim)        
+        self.mid_block2 = ResnetBlock(mid_dim, mid_dim, time_emb_dim=time_emb_dim)        
 
         for ind, (dim_in, dim_out) in enumerate(reversed(in_out)):
             is_last = ind == len(in_out) - 1
             self.ups.append(nn.ModuleList([
-                ResnetBlock(dim_out + dim_in, dim_out, time_emb_dim=cfg.time_emb_dim),
-                ResnetBlock(dim_out + dim_in, dim_out, time_emb_dim=cfg.time_emb_dim),
+                ResnetBlock(dim_out + dim_in, dim_out, time_emb_dim=time_emb_dim),
+                ResnetBlock(dim_out + dim_in, dim_out, time_emb_dim=time_emb_dim),
                 upsample(dim_out, dim_in) if not is_last else nn.Conv2d(dim_out, dim_in, 3, padding=1)
             ]))
 
-        self.final_res = ResnetBlock(dims[0] * 2, dims[0], time_emb_dim=cfg.time_emb_dim)
-        self.final_conv = nn.Conv2d(dims[0], cfg.channels, 1)
+        self.final_res = ResnetBlock(dims[0] * 2, dims[0], time_emb_dim=time_emb_dim)
+        self.final_conv = nn.Conv2d(dims[0], channels, 1)
 
     def forward(self, x, t):
         t = self.time_emb(t)
