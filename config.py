@@ -1,26 +1,32 @@
-import torch
-from dataclasses import dataclass
+import yaml
+from dataclasses import dataclass, field
 
 @dataclass
 class Config:
     # Model
     base_dim: int = 64
-    channel_mult: tuple = (1, 2, 2, 2)
+    channel_mult: list = field(default_factory=lambda: [1, 2, 2, 2])
     time_emb_dim: int = 512
-    channels: int = 1
 
     # Training
     max_steps: int = 15000
-    batch_size: int = 256
+    batch_size: int = 128
     lr: float = 1e-4
+    seed: int = 42
+    ema_update_after_step: int = 1000
+    ema_decay: float = 0.9995
+
+    # Dataset
+    dataset: str = 'mnist'
+    channels: int = 1
+    img_size: int = 28
 
     # Environment
-    data_dir: str = '/kaggle/working/data'
-    ckpt_dir: str = '/kaggle/working/checkpoints'
-    device: str = 'cuda' if torch.cuda.is_available() else 'cpu'
-    seed: int = 42
-    dataset: str = 'mnist'
+    data_dir: str = './data'
+    ckpt_dir: str = './checkpoints'
 
-    @property
-    def dims(self):
-        return [self.base_dim * channel for channel in self.channel_mult]
+    @classmethod
+    def parse_yaml(cls, path):
+        with open(path) as f:
+            data = yaml.safe_load(f)
+        return cls(**data)
