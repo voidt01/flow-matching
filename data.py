@@ -29,9 +29,9 @@ class UnlabeledImageDataset(Dataset):
         if self.transform is not None:
             img = self.transform(img)
         
-        return img
+        return img, 0 # matches how MNIST return single data
 
-def get_dataloader_Simpsons(cfg):
+def get_dataloader_Simpsons(data_dir, batch_size):
     transform = v2.Compose([
         v2.CenterCrop(200),
         v2.Resize((64, 64), interpolation=v2.InterpolationMode.BICUBIC, antialias=True),
@@ -41,26 +41,26 @@ def get_dataloader_Simpsons(cfg):
     ])
 
     dataset = UnlabeledImageDataset(
-        root_dir=cfg.data_dir,
+        root_dir=data_dir,
         transform=transform
     )
 
     return DataLoader(
         dataset,
-        batch_size=cfg.batch_size,
+        batch_size=batch_size,
         shuffle=True,
         num_workers=2,
         pin_memory=True
     )
 
-def get_dataloader_MNIST(cfg):
+def get_dataloader_MNIST(data_dir, batch_size):
     transform = v2.Compose([
         v2.ToImage(),
         v2.Normalize((0.5,), (0.5,))
     ])
 
     dataset = datasets.MNIST(
-        root=cfg.data_dir,
+        root=data_dir,
         train=True,
         download=True,
         transform=transform
@@ -68,7 +68,7 @@ def get_dataloader_MNIST(cfg):
 
     return DataLoader(
         dataset,
-        batch_size=cfg.batch_size,
+        batch_size=batch_size,
         shuffle=True,
         num_workers=2,
         pin_memory=True
