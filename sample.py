@@ -12,6 +12,7 @@ from utils import get_device
 def sample_euler(
     model,
     cfg,
+    device,
     n_samples: int,
     num_steps: int,
     fixed_noise = None 
@@ -19,13 +20,13 @@ def sample_euler(
     if fixed_noise is not None:
         x = fixed_noise.to(cfg.device)
     else:
-        x = torch.randn(n_samples, cfg.channels, 28, 28, device=cfg.device)
+        x = torch.randn(n_samples, cfg.channels, cfg.img_size, cfg.img_size, device=device)
 
-    t = torch.linspace(0, 1, steps=num_steps, device=cfg.device)
+    t = torch.linspace(0, 1, steps=num_steps, device=device)
     dt = 1 / num_steps
 
     for i in range(num_steps):
-        t_val = torch.full((x.shape[0],), t[i], device=cfg.device)
+        t_val = torch.full((x.shape[0],), t[i], device=device)
         x = x + dt * model(x, t_val)
     
     return x
@@ -79,7 +80,7 @@ def main():
     model.load_state_dict(ckpt[args.model])
     model.eval()
 
-    images = sample_euler(model, cfg, n_samples=args.n_samples, num_steps=args.sampling_steps, fixed_noise=noise)
+    images = sample_euler(model, cfg, n_samples=args.n_samples, num_steps=args.sampling_steps, fixed_noise=noise, device=device)
     save_samples(images, args.output_path)
 
 if __name__ == '__main__':
