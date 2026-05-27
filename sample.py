@@ -1,9 +1,12 @@
 import torch
+
+import yaml
 import argparse
 import matplotlib.pyplot as plt
 
 from model import Unet
 from train import Config
+from utils import get_device
 
 @torch.no_grad()
 def sample_euler(
@@ -41,21 +44,38 @@ def save_samples(images, output_path='samples.png'):
     plt.close()
 
 def main():
-    cfg = Config()
-
     parser = argparse.ArgumentParser(description='Sampling Configuration')
-    parser.add_argument('-cp', '--ckpt_path', type=str, required=True, metavar='', help='path to checkpoint file')
-    parser.add_argument('-md', '--model', type=str, required=True, metavar='', help='which model for sampling (temporary for learning)')
-    parser.add_argument('-op', '--output_path', type=str, metavar='', help='path to save sampled image')
-    parser.add_argument('-ns', '--n_samples', type=int, metavar='', default=3, help='n sample image to save')
-    parser.add_argument('-ss', '--sampling_steps', type=int, metavar='', default=100, help='n steps for sampling')
-    parser.add_argument('-fn', '--fixed_noise', type=str, metavar='', default=None, help='path for fixed noise tensor')
+    parser.add_argument('-cf', '--config', type=str, metavar='', help='Path to YAML config file')
+    parser.add_argument('-fn', '--fixed_noise', type=str, metavar='', help='Path to fixed gaussian noise')
+    parser.add_argument('-md', '--model', type=str, metavar='', help='Checkpoint to use for sample (model/ema)')
+    parser.add_argument('-ns', '--n_samples', type=int, metavar='', default=10, help='Total of images to be sample to')
+    parser.add_argument('-ss', '--sampling_steps', type=int, metavar='', default=50, help='How many steps to create a sample image')
+    parser.add_argument('-op', '--output_path', type=str, metavar='', help='Path to save sampled images')
     args = parser.parse_args()
 
-    noise = torch.load(args.fixed_noise) if args.fixed_noise else None
-    ckpt = torch.load(args.ckpt_path, map_location=cfg.device)
+    try:
+        cfg = Config.parse_yaml(args.config) if args.config else Config()
+    except FileNotFoundError:
+        print(f"config file not found: {args.config}")
+        return
+    except yaml.YAMLError as e:
+        print(f"invalid YAML file:\n{e}")
+        return
+    except TypeError as e:
+        print(f"invalid config fields:\n{e}")
+        return
 
-    model = Unet(cfg).to(cfg.device)
+    device = get_device()
+
+    noise = torch.load(args.fixed_noise) if args.fixed_noise else None
+    ckpt = torch.load(args.ckpt_path, map_location=device)
+
+    model = Unet(
+        base_dim=cfg.base_dim,
+        channel_mult=cfg.channel_mult,
+        channels=cfg.channels,
+        time_emb_dim=cfg.time_emb_dim
+    ).to(device)
     model.load_state_dict(ckpt[args.model])
     model.eval()
 
