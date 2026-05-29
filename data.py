@@ -56,6 +56,7 @@ def get_dataloader_Simpsons(data_dir, batch_size):
 def get_dataloader_MNIST(data_dir, batch_size):
     transform = v2.Compose([
         v2.ToImage(),
+        v2.ToDtype(torch.float32, scale=True),
         v2.Normalize((0.5,), (0.5,))
     ])
 
