@@ -3,51 +3,11 @@ import torch
 import os
 import yaml
 import argparse
-import matplotlib.pyplot as plt
 
 from model import Unet
 from train import Config
-from utils import get_device
-
-@torch.no_grad()
-def sample_euler(
-    model,
-    cfg,
-    device,
-    n_samples: int,
-    num_steps: int,
-    fixed_noise = None 
-):
-    if fixed_noise is not None:
-        x = fixed_noise.to(device)
-    else:
-        x = torch.randn(n_samples, cfg.channels, cfg.img_size, cfg.img_size, device=device)
-
-    t = torch.linspace(0, 1, steps=num_steps, device=device)
-    dt = 1 / num_steps
-
-    for i in range(num_steps):
-        t_val = torch.full((x.shape[0],), t[i], device=device)
-        x = x + dt * model(x, t_val)
-    
-    return x
-
-def save_samples(images, output_path='samples.png'):
-    # denormalize [-1, 1] -> [0, 1]
-    images = (images + 1) / 2
-    images = images.clamp(0, 1)
-
-    fig, axes = plt.subplots(1, len(images))
-    for i, ax in enumerate(axes):
-        img = images[i].detach().cpu()
-        if img.shape[0] == 1:
-            ax.imshow(img.squeeze().numpy(), cmap='gray')
-        else:
-            ax.imshow(img.permute(1, 2, 0).numpy())
-        ax.axis('off')
-     
-    plt.savefig(output_path, bbox_inches='tight')
-    plt.close()
+from utils import save_samples, get_device
+from samplers import sample_euler
 
 def main():
     parser = argparse.ArgumentParser(description='Sampling Configuration')

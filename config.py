@@ -24,6 +24,10 @@ class Config:
     # Environment
     data_dir: str = './data'
     ckpt_dir: str = './checkpoints'
+    img_samples_dir: str = './img-samples'
+
+    # Logging
+    log_img_every: int = 2000
 
     @classmethod
     def parse_yaml(cls, path):

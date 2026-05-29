@@ -1,7 +1,9 @@
 import copy
+import math
 import torch
 import random
 import numpy as np
+import matplotlib.pyplot as plt
 
 class EMA:
     def __init__(self, model, update_after_step, beta):
@@ -32,6 +34,43 @@ class EMA:
             return None
         return self.ema_model.state_dict()
     
+def save_samples(images, output_path='samples.png'):
+    if len(images.shape) == 3:
+        images = images.unsqueeze(0) # [C, H, W] -> [1, C, H, W]
+
+    # denormalize [-1, 1] -> [0, 1]
+    images = (images + 1) / 2
+    images = images.clamp(0, 1)
+
+    num_img = len(images)    
+
+    n_cols = int(math.ceil(math.sqrt(num_img)))
+    n_rows = int(math.ceil(num_img / n_cols))
+
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 2.5, n_rows * 2.5), squeeze=False) # return 2d grid
+    axes_flat = axes.flatten() # flatten to 1d for single loop
+
+    for i in range(len(axes_flat)):
+        ax = axes_flat[i]
+        
+        if i < num_img:
+            img = images[i].detach().cpu()
+
+            if img.shape[0] == 1:
+                ax.imshow(img.squeeze().numpy(), cmap='gray')
+            else:
+                ax.imshow(img.permute(1, 2, 0).numpy())
+        else:
+            ax.axis('off')
+            continue
+        
+        ax.axis('off')
+     
+    plt.tight_layout()
+    plt.savefig(output_path, bbox_inches='tight')
+    plt.close()
+
+
 def get_device():
     return 'cuda' if torch.cuda.is_available() else 'cpu'
 
