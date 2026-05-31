@@ -28,6 +28,7 @@ class Unet(nn.Module):
             self.downs.append(nn.ModuleList([
                 ResnetBlock(dim_in, dim_in, time_emb_dim=time_emb_dim),
                 ResnetBlock(dim_in, dim_in, time_emb_dim=time_emb_dim),
+                Residual(PreNorm(LinearAttention(dim_in), dim_in)),
                 downsample(dim_in, dim_out) if not is_last else nn.Conv2d(dim_in, dim_out, 3, padding=1)
             ]))  
                 
@@ -41,6 +42,7 @@ class Unet(nn.Module):
             self.ups.append(nn.ModuleList([
                 ResnetBlock(dim_out + dim_in, dim_out, time_emb_dim=time_emb_dim),
                 ResnetBlock(dim_out + dim_in, dim_out, time_emb_dim=time_emb_dim),
+                Residual(PreNorm(LinearAttention(dim_out), dim_out)),
                 upsample(dim_out, dim_in) if not is_last else nn.Conv2d(dim_out, dim_in, 3, padding=1)
             ]))
 
@@ -53,10 +55,12 @@ class Unet(nn.Module):
         r = x.clone()
 
         skips = []
-        for block1, block2, down in self.downs:
+        for block1, block2, LinAttn, down in self.downs:
             x = block1(x, t)
             skips.append(x)
+
             x = block2(x, t)
+            x = LinAttn(x)
             skips.append(x)
 
             x = down(x)
@@ -65,11 +69,13 @@ class Unet(nn.Module):
         x = self.mid_attn(x)
         x = self.mid_block2(x, t)
 
-        for block1, block2, up in self.ups:
+        for block1, block2, LinAttn, up in self.ups:
             x = torch.cat([x, skips.pop()], dim=1)
             x = block1(x, t)
+
             x = torch.cat([x, skips.pop()], dim=1)
             x = block2(x, t)
+            x = LinAttn(x)
 
             x = up(x)
         
@@ -104,7 +110,39 @@ class Attention(nn.Module):
         attn = sim.softmax(dim=-1)
 
         out = einsum('b h i j, b h d j -> b h i d', attn, v)
-        out = rearrange(out, 'b h (x y) d -> b (h d) x y', x = h, y = w)
+        out = rearrange(out, 'b h (x y) d -> b (h d) x y', x=h, y=w)
+
+        return self.to_out(out)
+
+class LinearAttention(nn.Module):
+    def __init__(self, dim, heads=4, dim_head=64):
+        super().__init__()
+
+        self.scale = dim_head ** -0.5
+        self.heads = heads
+        hidden_dims = self.heads * dim_head
+
+        self.to_qkv = nn.Conv2d(dim, hidden_dims * 3, 1, bias=False)
+        self.to_out = nn.Sequential(nn.Conv2d(hidden_dims, dim, 1), 
+                                    nn.GroupNorm(1, dim))
+
+    def forward(self, x):
+        b, c, h, w = x.shape
+
+        qkv = self.to_qkv(x).chunk(3, dim=1)
+        q, k, v = map(
+            lambda t: rearrange(t, 'b (h c) x y -> b h c (x y)', h=self.heads), qkv #[B, H, D, N]
+        )
+
+        # Kernel function
+        q = q.softmax(dim=-2)
+        k = k.softmax(dim=-1)
+
+        q = q * self.scale
+        context = einsum('b h c i, b h d i ->  b h c d', k, v) #[B, H, D, D]
+
+        out = einsum('b h c i, b h c d -> b h i d', q, context) #[B, H, N, D]
+        out = rearrange(out, 'b h (x y) i -> b (h i) x y', x=h, y=w) #[B, H*D, h, w]
 
         return self.to_out(out)
 
