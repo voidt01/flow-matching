@@ -7,13 +7,14 @@ import argparse
 from model import Unet
 from train import Config
 from utils import save_samples, get_device
-from samplers import sample_euler
+from samplers import sample_euler, sample_heun
 
 def main():
     parser = argparse.ArgumentParser(description='Sampling Configuration')
     parser.add_argument('-cf', '--config', type=str, metavar='', help='Path to YAML config file')
     parser.add_argument('-fn', '--fixed_noise', type=str, metavar='', help='Path to fixed gaussian noise')
     parser.add_argument('-md', '--model', type=str, metavar='', help='Checkpoint to use for sample (model/ema)')
+    parser.add_argument('-sm', '--sampler', type=str, metavar='', help='ODE solver for sampling (euler/heun)')
     parser.add_argument('-ns', '--n_samples', type=int, metavar='', default=10, help='Total of images to be sample to')
     parser.add_argument('-ss', '--sampling_steps', type=int, metavar='', default=50, help='How many steps to create a sample image')
     parser.add_argument('-op', '--output_path', type=str, metavar='', help='Path to save sampled images')
@@ -46,7 +47,13 @@ def main():
     model.load_state_dict(ckpt[args.model])
     model.eval()
 
-    images = sample_euler(model, cfg, n_samples=args.n_samples, num_steps=args.sampling_steps, fixed_noise=noise, device=device)
+    if args.sampler == 'euler':
+        images = sample_euler(model, cfg, n_samples=args.n_samples, num_steps=args.sampling_steps, fixed_noise=noise, device=device)
+    elif args.sampler == 'heun':
+        images = sample_heun(model, cfg, n_samples=args.n_samples, num_steps=args.sampling_steps, fixed_noise=noise, device=device)
+    else:
+        raise ValueError('Unknown sampler')
+    
     save_samples(images, args.output_path)
 
 if __name__ == '__main__':
