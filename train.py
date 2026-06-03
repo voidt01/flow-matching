@@ -92,7 +92,7 @@ def main():
     ).to(device)
     ema_model = EMA(model, update_after_step=cfg.ema_update_after_step, beta=cfg.ema_decay)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=cfg.lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=cfg.max_lr)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg.max_steps, eta_min=cfg.min_lr)
     scaler = GradScaler(device=device)
 
