@@ -10,10 +10,19 @@ from itertools import cycle
 from model import Unet
 from config import Config
 from data import get_dataloader_MNIST, get_dataloader_Simpsons
-from samplers import sample_euler
+from samplers import sample_heun
 from utils import EMA, save_samples, get_device, set_seed
 
-def train(model, ema, optimizer, scaler, loader, device, cfg):
+def train(
+    model, 
+    ema, 
+    optimizer, 
+    scheduler, 
+    scaler, 
+    loader, 
+    device, 
+    cfg
+):
 
     os.makedirs(cfg.img_samples_dir, exist_ok=True)    
     os.makedirs(cfg.ckpt_dir, exist_ok=True)
@@ -39,16 +48,16 @@ def train(model, ema, optimizer, scaler, loader, device, cfg):
         scaler.step(optimizer)
         scaler.update()
 
+        scheduler.step()
         ema.update(step)
 
         if (step + 1) % (cfg.max_steps // 10) == 0:
-            print(f'Step {step + 1}: Loss - {loss.item()}')
+            current_lr = optimizer.param_groups[0]['lr']
+            print(f'Step {step + 1} | Loss {loss.item():.4f} | LR {current_lr:.2e}')
         
         if (step + 1) % cfg.log_img_every == 0:
-            model_images = sample_euler(model, cfg, device, 12, 50)
-            ema_images = sample_euler(ema.ema_model, cfg, device, 12, 50) # make sure ema_update_after_step < log_img_every
-            save_samples(model_images, output_path=os.path.join(cfg.img_samples_dir, f"regular_model_{step} steps.png"))
-            save_samples(ema_images, output_path=os.path.join(cfg.img_samples_dir, f"ema_model_{step} steps.png"))
+            ema_images = sample_heun(ema.ema_model, cfg, device, 12, 25) # make sure ema_update_after_step < log_img_every
+            save_samples(ema_images, output_path=os.path.join(cfg.img_samples_dir, f"ema_model_{step}_steps.png"))
                 
     torch.save({
         'model': model.state_dict(),
@@ -84,6 +93,7 @@ def main():
     ema_model = EMA(model, update_after_step=cfg.ema_update_after_step, beta=cfg.ema_decay)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg.lr)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg.max_steps, eta_min=cfg.min_lr)
     scaler = GradScaler(device=device)
 
     if cfg.dataset == 'mnist':
@@ -93,7 +103,7 @@ def main():
     else:
         raise ValueError('Unknown dataset')
 
-    train(model, ema_model, optimizer, scaler, loader, device, cfg)
+    train(model, ema_model, optimizer, scheduler, scaler, loader, device, cfg)
 
 if __name__ == '__main__':
     main()

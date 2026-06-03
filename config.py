@@ -11,7 +11,8 @@ class Config:
     # Training
     max_steps: int = 15000
     batch_size: int = 128
-    lr: float = 1e-4
+    max_lr: float = 2e-4
+    min_lr: float = 3e-5
     seed: int = 42
     ema_update_after_step: int = 1000
     ema_decay: float = 0.9995
