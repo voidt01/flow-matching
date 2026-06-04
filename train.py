@@ -5,13 +5,12 @@ from torch.amp import GradScaler, autocast
 import os
 import yaml
 import argparse
-from itertools import cycle
 
 from model import Unet
 from config import Config
 from data import get_dataloader_MNIST, get_dataloader_Simpsons
 from samplers import sample_heun
-from utils import EMA, save_samples, get_device, set_seed
+from utils import EMA, save_samples, get_device, set_seed, cycle
 
 def train(
     model, 

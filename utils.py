@@ -70,6 +70,13 @@ def save_samples(images, output_path='samples.png'):
     plt.savefig(output_path, bbox_inches='tight')
     plt.close()
 
+def cycle(iterable):
+    """
+    generator for infinite stream data (step-based training)
+    """
+    while True:
+        for batch in iterable:
+            yield batch
 
 def get_device():
     return 'cuda' if torch.cuda.is_available() else 'cpu'
