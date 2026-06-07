@@ -11,11 +11,11 @@ class Config:
     # Training
     max_steps: int = 15000
     batch_size: int = 128
-    max_lr: float = 2e-4
-    min_lr: float = 3e-5
+    max_lr: float = 1e-4
+    min_lr: float = 1e-4
     seed: int = 42
     ema_update_after_step: int = 1000
-    ema_decay: float = 0.9995
+    ema_decay: float = 0.999
 
     # Dataset
     dataset: str = 'mnist'
@@ -29,6 +29,7 @@ class Config:
 
     # Logging
     log_img_every: int = 2000
+    checkpointing_every: int = 0
 
     @classmethod
     def parse_yaml(cls, path):

@@ -12,7 +12,6 @@ class EMA:
         self.model = model
         self.ema_model = None
 
-
     @torch.no_grad()
     def update(self, step):
         if step < self.update_after_step:
@@ -33,6 +32,14 @@ class EMA:
         if self.ema_model is None:
             return None
         return self.ema_model.state_dict()
+    
+    def load_state_dict(self, state_dict):
+        if state_dict is None:
+            return
+        self.ema_model = copy.deepcopy(self.model).eval()
+        for p in self.ema_model.parameters():
+            p.requires_grad_(False)
+        self.ema_model.load_state_dict(state_dict)
     
 def save_samples(images, output_path='samples.png'):
     if len(images.shape) == 3:

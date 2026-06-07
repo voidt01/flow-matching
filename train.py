@@ -19,14 +19,15 @@ def train(
     scheduler, 
     scaler, 
     loader, 
-    device, 
+    device,
+    start_step, 
     cfg
 ):
 
     os.makedirs(cfg.img_samples_dir, exist_ok=True)    
     os.makedirs(cfg.ckpt_dir, exist_ok=True)
     
-    for step in range(cfg.max_steps):
+    for step in range(start_step, cfg.max_steps):
         x1, _ = next(loader)
         
         x1 = x1.to(device)
@@ -56,16 +57,27 @@ def train(
         
         if (step + 1) % cfg.log_img_every == 0:
             ema_images = sample_heun(ema.ema_model, cfg, device, 12, 25) # make sure ema_update_after_step < log_img_every
-            save_samples(ema_images, output_path=os.path.join(cfg.img_samples_dir, f"ema_model_{step}_steps.png"))
+            save_samples(ema_images, output_path=os.path.join(cfg.img_samples_dir, f"ema_model_{step + 1}_steps.png"))
+
+        if (step + 1) % cfg.checkpointing_every == 0:
+            torch.save({
+                'model': model.state_dict(),
+                'ema': ema.state_dict(), # could be None if step < update_after_step
+                'optimizer': optimizer.state_dict(),
+                'scheduler': scheduler.state_dict(),
+                'scaler': scaler.state_dict(),
+                'step': step + 1
+            }, os.path.join(cfg.ckpt_dir, f"{cfg.dataset}_latest.pt")) 
                 
     torch.save({
         'model': model.state_dict(),
-        'ema': ema.state_dict(), # could be None if step < update_after_step
+        'ema': ema.state_dict() # could be None if step < update_after_step
     }, os.path.join(cfg.ckpt_dir, f"{cfg.dataset}_{cfg.max_steps}steps.pt")) 
 
 def main():
     parser = argparse.ArgumentParser(description='Training Configuration')
     parser.add_argument('-cf', '--config', type=str, metavar='', help='Path to YAML config file')
+    parser.add_argument('-rs', '--resume', type=str, metavar='', default=None, help='Path to the checkpoints for resume training')
     args = parser.parse_args()
 
     try:
@@ -89,7 +101,7 @@ def main():
         channels=cfg.channels,
         time_emb_dim=cfg.time_emb_dim
     ).to(device)
-    ema_model = EMA(model, update_after_step=cfg.ema_update_after_step, beta=cfg.ema_decay)
+    ema = EMA(model, update_after_step=cfg.ema_update_after_step, beta=cfg.ema_decay)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg.max_lr)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg.max_steps, eta_min=cfg.min_lr)
@@ -102,7 +114,17 @@ def main():
     else:
         raise ValueError('Unknown dataset')
 
-    train(model, ema_model, optimizer, scheduler, scaler, loader, device, cfg)
+    start_step = 0
+    if args.resume is not None:
+        checkpoints = torch.load(args.resume, map_location=device)
+        model.load_state_dict(checkpoints['model'])
+        ema.load_state_dict(checkpoints['ema'])
+        optimizer.load_state_dict(checkpoints['optimizer'])
+        scheduler.load_state_dict(checkpoints['scheduler'])
+        scaler.load_state_dict(checkpoints['scaler'])
+        start_step = checkpoints['step']
+
+    train(model, ema, optimizer, scheduler, scaler, loader, device, start_step, cfg)
 
 if __name__ == '__main__':
     main()
